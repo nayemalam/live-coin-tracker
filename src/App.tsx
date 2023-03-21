@@ -161,7 +161,7 @@ function App() {
   return (
     <div className="flex items-center justify-center flex-col h-screen">
       <div className="card w-6/12 rounded drop-shadow-sm border p-8">
-        <div className="flex flex-row justify-between gap-10 pb-8">
+        <div className="flex flex-row items-center justify-between gap-10 pb-8">
           <div>
             <div className="flex items-center">
               <img
