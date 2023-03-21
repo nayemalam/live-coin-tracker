@@ -1,10 +1,16 @@
 import {
-  CategoryScale, Chart as ChartJS, Legend, LinearScale, LineElement, PointElement, Title,
-  Tooltip
-} from 'chart.js';
-import { useEffect, useState } from 'react';
-import { Line } from 'react-chartjs-2';
-import './App.css';
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+} from 'chart.js'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Line } from 'react-chartjs-2'
+import './App.css'
 
 ChartJS.register(
   CategoryScale,
@@ -14,105 +20,175 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend
-);
+)
 
 export const options = {
   responsive: true,
   plugins: {
     legend: {
+      display: false,
       position: 'bottom' as const,
     },
   },
-};
-
-const labels = ['January', 'February', 'March', 'April', 'May', 'June', 'July'];
-
+  scales: {
+    x: {
+      display: false,
+    },
+    y: {
+      display: false,
+    },
+  },
+  pointRadius: 1,
+  pointHoverRadius: 1,
+}
 
 let flatCoinPairsEndpoint = 'https://api.newton.co/markets/v1/rates'
 
-let candlesEndpoint= 'https://api.newton.co/markets/v1/candles'
+let candlesEndpoint = 'https://api.newton.co/markets/v1/candles'
+
+let symbolEndpoint =
+  'https://api.coingecko.com/api/v3/coins/markets?vs_currency=cad'
 
 type Coin = {
-  ask: number,
-  bid: number,
-  change: number,
-  spot: number,
-  timestamp: number,
+  ask: number
+  bid: number
+  change: number
+  spot: number
+  timestamp: number
   symbol: string
 }
 
 type SelectedTicker = {
   ticker: string
   name: string
+  symbol: string
 }
 
 type Candle = {
-  close_timestamp: number,
-  close: number,
+  close_timestamp: number | string
+  close: number
 }
 
 function App() {
   const [coin, setCoin] = useState<Coin>({} as Coin)
   const [selectedTicker, setSelectedTicker] = useState<SelectedTicker>({
     ticker: 'ETH',
-    name: 'Ethereum'
+    name: 'Ethereum',
+    symbol:
+      'https://assets.coingecko.com/coins/images/279/large/ethereum.png?1595348880',
   })
   const [candles, setCandles] = useState<Candle[]>([])
 
-  useEffect(() => {
-    // ticker: where X is the ticker
-    const handleRatesOfCoinPair = async (ticker: string) => {
-      try {
-        const response = await fetch(flatCoinPairsEndpoint + `?symbol=${ticker}_CAD`)
-        const data = await response.json()
-        setCoin(data)
-      } catch(e) {
-        console.log(e)
-      }
+  const data = useMemo(() => {
+    const items = {
+      labels: candles.map((candle) => candle.close_timestamp),
+      datasets: [
+        {
+          label: selectedTicker.name,
+          data: candles.map((candle) => candle.close),
+          borderColor: '#04478f',
+          backgroundColor: '#4E81B9',
+          tension: 0.8,
+        },
+      ],
     }
+    return items
+  }, [candles, selectedTicker])
 
-    const handleCandles = async (ticker: string, timeframe: string = '15m', limit: number = 10) => {
+  // ticker: where X is the ticker
+  const handleRatesOfCoinPair = useCallback(async (ticker: string) => {
+    try {
+      const response = await fetch(
+        flatCoinPairsEndpoint + `?symbol=${ticker}_CAD`
+      )
+      const data = await response.json()
+      setCoin(data)
+    } catch (e) {
+      console.log(e)
+    }
+  }, [])
+
+  const handleCandles = useCallback(
+    async (ticker: string, timeframe: string = '15m', limit: number = 50) => {
       try {
-        const response = await fetch(candlesEndpoint + `?symbol=${ticker}_CAD&timeframe=${timeframe}&limit=${limit}`)
+        const response = await fetch(
+          candlesEndpoint +
+            `?symbol=${ticker}_CAD&timeframe=${timeframe}&limit=${limit}`
+        )
         const data = await response.json()
         const dataReversed = data.reverse()
+        // convert all timestamps to human readable time
+        dataReversed.forEach((candle: Candle) => {
+          candle.close_timestamp = new Date(
+            Number(candle.close_timestamp) * 1000
+          )
+            .toISOString()
+            .slice(11, 16)
+        })
         setCandles(dataReversed)
-      } catch(e) {
+      } catch (e) {
         console.log(e)
       }
-    }
+    },
+    []
+  )
 
-    handleRatesOfCoinPair(selectedTicker.ticker)
-    handleCandles(selectedTicker.ticker)
+  const handleRetrieveSymbol = useCallback(async () => {
+    try {
+      const response = await fetch(symbolEndpoint)
+      const data = await response.json()
+      const symbol = data.find(
+        (coin: any) => coin.symbol === selectedTicker.ticker.toLowerCase()
+      )
+      setSelectedTicker({
+        ...selectedTicker,
+        symbol: symbol.image,
+      })
+    } catch (e) {
+      console.log(e)
+    }
   }, [selectedTicker])
 
-  const data = {
-    labels: candles.map(candle => candle.close_timestamp),
-    datasets: [
-      {
-        label: selectedTicker.name,
-        data: candles.map(candle => candle.close),
-        borderColor: 'rgb(17, 31, 155)',
-        backgroundColor: 'rgba(56, 29, 237, 0.5)',
-      },
-    ],
-  };
+  useEffect(() => {
+    handleRatesOfCoinPair(selectedTicker.ticker)
+    handleCandles(selectedTicker.ticker)
+  }, [selectedTicker, handleRatesOfCoinPair, handleCandles])
+
+  useEffect(() => {
+    handleRetrieveSymbol()
+  }, [])
 
   return (
-    <div className="flex align-center justify-center flex-col text-center mt-20">
-      <div className="card w-6/12 rounded drop-shadow-sm">
-        <div className='top-context flex flex-row justify-space-between'>
+    <div className="flex items-center justify-center flex-col h-screen">
+      <div className="card w-6/12 rounded drop-shadow-sm border p-8">
+        <div className="flex flex-row justify-between gap-10 pb-8">
           <div>
-            <div>logo here</div>
-            <strong>{selectedTicker.name}</strong>
-            <p>{selectedTicker.ticker}</p>
+            <div className="flex items-center">
+              <img
+                className="w-3 h-3 rounded-full"
+                src={selectedTicker.symbol}
+              />
+              <p className="text-[#4E81B9] text-xs">{selectedTicker.name}</p>
+            </div>
+            <div className="pl-2">
+              <strong className="text-lg">{selectedTicker.name}</strong>
+              <p className="text-sm">{selectedTicker.ticker}</p>
+            </div>
           </div>
           <div>
-            <p>$ {coin.spot}</p>
-            <p>{coin.change}%</p>
+            <div className="invisible">_</div>
+            <p className="text-lg">$ {coin.spot?.toFixed(2) ?? '-'}</p>
+            <p className="text-right">
+              {coin.change > 0 ? (
+                <span className="text-green-500">↑</span>
+              ) : (
+                <span className="text-red-500">↓</span>
+              )}{' '}
+              {coin.change} %
+            </p>
           </div>
         </div>
-        <div className='bottom-graph'>
+        <div className="bottom-graph">
           <Line options={options} data={data} />
         </div>
       </div>
